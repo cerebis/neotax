@@ -39,7 +39,7 @@ public class NeoDao {
 	private static String LOGICAL_LOG_SIZE = "false";
 	private static String NCBI_DELIMITER = "\t\\|\t?";
 	private static Label NODE_LABEL = DynamicLabel.label("Node");
-	private static File DEFAULT_DATABASE = new File("./taxdb");
+	private static File DEFAULT_DATABASE = new File("./neotaxdb");
 	private static Logger logger = LoggerFactory.getLogger(NeoConsole.class);
 	private File dbPath;
 	
