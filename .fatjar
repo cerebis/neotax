@@ -1,0 +1,14 @@
+#Fat Jar Configuration File
+#Fri Dec 19 19:23:27 EST 2014
+onejar.license.required=false
+manifest.classpath=
+manifest.removesigners=true
+onejar.checkbox=true
+jarname=NeoTax_fat.jar
+manifest.mergeall=true
+manifest.mainclass=mzd.taxonomy.neo.NeoConsole
+manifest.file=<createnew>
+jarname.isextern=false
+onejar.expand=
+excludes=
+includes=
