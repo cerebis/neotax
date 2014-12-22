@@ -7,6 +7,8 @@ import java.io.IOException;
 import java.util.ArrayList;
 import java.util.List;
 
+import mzd.taxonomy.neo.NeoDao.Mode;
+
 import org.apache.commons.cli.CommandLine;
 import org.apache.commons.cli.CommandLineParser;
 import org.apache.commons.cli.GnuParser;
@@ -16,15 +18,16 @@ import org.apache.commons.cli.OptionGroup;
 import org.apache.commons.cli.Options;
 import org.apache.commons.cli.ParseException;
 
+/**
+ * Command line console for querying NCBI Taxonomy database
+ * for taxon ids and lineages. 
+ */
 public class NeoConsole {
-	private NeoDao dao;
+	private static int CONSOLE_WIDTH = 120;
+	private NeoDao dao = null;
 	
-	public NeoConsole() {
-		this.dao = new NeoDao();
-	}
-	
-	public NeoConsole(File dbPath) {
-		this.dao = new NeoDao(dbPath);
+	public void openDBConnection(File dbPath, Mode mode) throws IOException {
+		this.dao = new NeoDao(dbPath, mode);
 	}
 	
 	public NeoDao getDao() {
@@ -124,7 +127,9 @@ public class NeoConsole {
 	}
 	
 	public void shutdown() {
-		getDao().shutdown();
+		if (getDao() != null) {
+			getDao().shutdown();
+		}
 	}
 	
 	/**
@@ -170,15 +175,23 @@ public class NeoConsole {
 	
 	@SuppressWarnings("static-access")
 	public static void main(String[] args) throws IOException, ParseException {
+		char HELP_OPT = 'h';
 		char DATABASE_OPT = 'd';
+		char REVERSE_OPT = 'r';
+		char INIT_OPT = 'i';
 		char LINEAGE_OPT = 'l';
 		char TAXON_OPT = 't';
-		char REVERSE_OPT = 'r';
 		char FILE_OPT = 'f';
-
+		
 		Options options = new Options();
 		
 		OptionGroup cli_group = new OptionGroup();
+		
+		cli_group.addOption(OptionBuilder
+			.withDescription("Initialise database from NCBI dump files")
+			.withArgName("NODES.DMP> <NAMES.DMP")
+			.hasArgs(2)
+			.create(INIT_OPT));
 		
 		cli_group.addOption(OptionBuilder
 				.withDescription("Validate NCBI taxon by taxonomic id (integer)")
@@ -206,19 +219,28 @@ public class NeoConsole {
 				.create(REVERSE_OPT));
 		
 		options.addOption(OptionBuilder
-				.withDescription("File input")
+				.withDescription("Trailing arguments are taken to be a file names [only first processed]")
 				.hasArg(false)
 				.create(FILE_OPT));
 		
+		options.addOption(OptionBuilder
+				.withDescription("Help")
+				.withLongOpt("help")
+				.hasArg(false)
+				.create(HELP_OPT));		
+		
 		CommandLineParser parser =  new GnuParser();
-		NeoConsole nc = null;
+		NeoConsole nc = new NeoConsole();
 		
 		try {
 			// Parse command line
 			CommandLine cmd = parser.parse(options, args, true);
 			
-			if (cmd.getArgList().size() == 0) {
-				throw new ParseException("no arguments supplied");
+			if (args.length == 0 || cmd.hasOption(HELP_OPT)) {
+				HelpFormatter formatter = new HelpFormatter();
+				String usage = "neotax [-d <PATH>] [-f] [-h] " +
+						"[-i <NODES.DMP> <NAMES.DMP> | -l <LINEAGE | FILE_NAME> | -t <TAXID | FILE_NAME>]";
+				formatter.printHelp(CONSOLE_WIDTH, usage, "", options, "", false);
 			}
 			
 			// Set the path to the database, using a canonical path
@@ -228,39 +250,48 @@ public class NeoConsole {
 			if (cmd.hasOption(DATABASE_OPT)) {
 				dbPath = new File(cmd.getOptionValue(DATABASE_OPT))
 							.getCanonicalFile();
+			}
+			
+			// Initialise a new database
+			if (cmd.hasOption(INIT_OPT)) {
+				nc.openDBConnection(dbPath, Mode.INIT_NEW);
+				String[] initArgs = cmd.getOptionValues(INIT_OPT);
+				nc.getDao().initialiseDatabase(
+						dbPath, 
+						new File(initArgs[0]), 
+						new File(initArgs[1]));
+			}
+			
+			// Access an existing database.
+			else {
 				
-				if (dbPath.isFile()) {
-					throw new IOException(String.format("Specified path %s is not a folder", dbPath));
+				boolean reverseOrder = false;
+				if (cmd.hasOption(REVERSE_OPT)) {
+					reverseOrder = true;
 				}
-				if (!dbPath.exists()) {
-					throw new IOException(String.format("Database at path %s does not exist", dbPath));
+				
+				// Validate taxons
+				if (cmd.hasOption(TAXON_OPT)) {
+					nc.openDBConnection(dbPath, Mode.OPEN_EXISTING);
+					
+					if (cmd.hasOption(FILE_OPT)) {
+						nc.validateTaxons(getInputFile(cmd));
+					}
+					else {
+						nc.validateTaxons(stringsToInt(cmd.getArgs()));
+					}
 				}
-			}
-			
-			boolean reverseOrder = false;
-			if (cmd.hasOption(REVERSE_OPT)) {
-				reverseOrder = true;
-			}
-			
-			// Validate taxons
-			if (cmd.hasOption(TAXON_OPT)) {
-				nc = new NeoConsole(dbPath);
-				if (cmd.hasOption(FILE_OPT)) {
-					nc.validateTaxons(getInputFile(cmd));
-				}
-				else {
-					nc.validateTaxons(stringsToInt(cmd.getArgs()));
-				}
-			}
-			
-			// Validate lineages
-			else if (cmd.hasOption(LINEAGE_OPT)) {
-				nc = new NeoConsole(dbPath);
-				if (cmd.hasOption(FILE_OPT)) {
-					nc.validateLineage(getInputFile(cmd), reverseOrder);
-				}
-				else {
-					nc.validateLineage(stringsToInt(cmd.getArgs()), reverseOrder);
+				
+				// Validate lineages
+				else if (cmd.hasOption(LINEAGE_OPT)) {
+					nc.openDBConnection(dbPath, Mode.OPEN_EXISTING);
+					
+					if (cmd.hasOption(FILE_OPT)) {
+						nc.validateLineage(getInputFile(cmd), reverseOrder);
+					}
+					else {
+						nc.validateLineage(stringsToInt(cmd.getArgs()), reverseOrder);
+					}
 				}
 			}
 			
@@ -269,7 +300,10 @@ public class NeoConsole {
 			System.out.println("Commandline error: " + ex.getMessage());
 			HelpFormatter formatter = new HelpFormatter();
 			formatter.printHelp("neotax", options);
-		}		
+		}
+		catch (Exception ex) {
+			System.out.println("Runtime error: " + ex.getMessage());
+		}
 		finally {
 			if (nc != null) {
 				nc.shutdown();

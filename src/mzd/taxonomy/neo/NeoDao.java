@@ -32,28 +32,64 @@ import org.slf4j.LoggerFactory;
 
 import scala.collection.convert.Wrappers.SeqWrapper;
 
+/**
+ * Data access object for NCBI taxonomy stored in Neo4j database
+ */
 public class NeoDao {
 
+	// Access mode
+	public static enum Mode {
+		INIT_NEW,
+		OPEN_EXISTING
+	}
+	
 	private GraphDatabaseService gds;
 	// all manner of options have been tried here. Neo4j keeps making logs anyhow.
 	private static String LOGICAL_LOG_SIZE = "false";
 	private static String NCBI_DELIMITER = "\t\\|\t?";
 	private static Label NODE_LABEL = DynamicLabel.label("Node");
-	private static File DEFAULT_DATABASE = new File("./neotaxdb");
+	private static File DEFAULT_DATABASE = new File("./taxdb");
 	private static Logger logger = LoggerFactory.getLogger(NeoConsole.class);
 	private File dbPath;
 	
-	public NeoDao() {
-		this(DEFAULT_DATABASE);
+	public NeoDao() throws IOException {
+		this(DEFAULT_DATABASE, Mode.OPEN_EXISTING);
 		dbPath = DEFAULT_DATABASE;
 	}
 	
-	public NeoDao(File dbPath) {
+	public NeoDao(Mode mode) throws IOException {
+		this(DEFAULT_DATABASE, mode);
+		dbPath = DEFAULT_DATABASE;
+	}
+	
+	public NeoDao(File dbPath) throws IOException {
+		this(dbPath, Mode.OPEN_EXISTING);
+	}
+	
+	public NeoDao(File dbPath, Mode mode) throws IOException {
 		if (dbPath == null) {
 			dbPath = DEFAULT_DATABASE;
 		}
 		this.dbPath = dbPath;
 
+		// Mode determines whether database should already exist.
+		switch (mode) {
+		case OPEN_EXISTING:
+			if (!dbPath.exists()) {
+				throw new IOException(String.format("Database at path [%s] does not exist", dbPath));
+			}
+			if (dbPath.isFile()) {
+				throw new IOException(String.format("Specified path [%s] is not a folder", dbPath));
+			}
+			break;
+		case INIT_NEW:
+			if (dbPath.exists()) {
+				throw new IOException(String.format("Database at path [%s] already exists. " +
+						"Move away or delete before initialisation.", dbPath));
+			}
+			break;
+		}
+		
 		gds = new GraphDatabaseFactory()
 				.newEmbeddedDatabaseBuilder(dbPath.toString())
 				.setConfig(GraphDatabaseSettings.keep_logical_logs, LOGICAL_LOG_SIZE)
@@ -79,7 +115,7 @@ public class NeoDao {
 		return field == null ? null : Integer.parseInt(field);
 	}
 
-	public void storeNodes(String path) throws IOException {
+	private void storeNodes(File path) throws IOException {
 		
 		// Create all NCBI node nodes... (an unfortunate name clash)
 		System.out.println("Creating nodes...");
@@ -87,7 +123,7 @@ public class NeoDao {
 		
 		BufferedReader reader = null;
 		try (Transaction tx = beginTransaction()){
-			reader = new BufferedReader(new FileReader(new File(path)));
+			reader = new BufferedReader(new FileReader(path));
 			
 			while (true) {
 				String line = reader.readLine();
@@ -136,13 +172,13 @@ public class NeoDao {
 		}
  	}
 	
-	public void addNames(String path) throws IOException {
+	private void addNames(File path) throws IOException {
 		System.out.println("Decorating nodes with scientific names...");
 		logger.debug("Decorating nodes with scientific names...");
 		
 		BufferedReader reader = null;
 		try (Transaction tx = beginTransaction()){
-			reader = new BufferedReader(new FileReader(new File(path)));
+			reader = new BufferedReader(new FileReader(path));
 			
 			ExecutionEngine engine = getEngineInstance();
 			
@@ -363,16 +399,32 @@ public class NeoDao {
 		}
 	}
 
-	public static void main(String[] args) throws IOException {
-		if (args.length != 3) {
-			System.out.println("Usage: <database path> <nodes.dmp> <names.dmp>");
-			System.exit(1);
-		}
-		NeoDao dao = new NeoDao(new File(args[0]));
-		dao.storeNodes(args[1]);
-		dao.addNames(args[2]);
-		dao.shutdown();
+	private static boolean fileExists(File fname) {
+		return fname.exists() && !fname.isDirectory();
 	}
 	
-	
+	/**
+	 * Initialise a new database and once complete issue shutdown. To use the newly
+	 * created database, users should create a new instance of {@code NeoDao}.
+	 *  
+	 * @param dbPath
+	 * @param nodesDump
+	 * @param namesDump
+	 * @throws IOException
+	 */
+	public void initialiseDatabase(File dbPath, File nodesDump, File namesDump) throws IOException {
+
+		// Check NCBI files for existence.
+		for (File f : new File[]{nodesDump, namesDump}) {
+			if (!fileExists(nodesDump)) {
+				throw new IOException(String.format(
+						"Specified NCBI input file [%s] does not exist or is not a file",f.getPath()));
+			}
+		}
+		
+		storeNodes(nodesDump);
+		addNames(namesDump);
+		shutdown();
+	}
+
 }
