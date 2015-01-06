@@ -66,7 +66,7 @@ public class NeoConsole {
 				}
 				String[] fields = line.split(" ");
 				if (fields.length > 1) {
-					throw new RuntimeException("Only one per taxon id per line when validating individuals");
+					throw new RuntimeException("Only one taxon id per line when validating individuals");
 				}
 				List<Integer> taxIds = stringsToInt(fields);
 				getDao().taxonsExist(taxIds);
