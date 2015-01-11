@@ -49,6 +49,7 @@ public class NeoDao {
 	private static String NCBI_DELIMITER = "\t\\|\t?";
 	private static Label NODE_LABEL = DynamicLabel.label("Node");
 	private static File DEFAULT_DATABASE = new File("./taxdb");
+	private static int PERIODIC_COMMIT = 5000;
 	private static Logger logger = LoggerFactory.getLogger(NeoConsole.class);
 	private File dbPath;
 	
@@ -120,11 +121,14 @@ public class NeoDao {
 		// Create all NCBI node nodes... (an unfortunate name clash)
 		System.out.println("Creating nodes...");
 		logger.debug("Creating nodes...");
-		
+
 		BufferedReader reader = null;
-		try (Transaction tx = beginTransaction()){
+		Transaction tx = null;
+		try {
 			reader = new BufferedReader(new FileReader(path));
-			
+			tx = beginTransaction();
+			int n_nodes = 0;
+			ConsoleProgress progress = new ConsoleProgress(10000);
 			while (true) {
 				String line = reader.readLine();
 				if (line == null) {
@@ -139,6 +143,16 @@ public class NeoDao {
 				n.setProperty("taxid", parseInt(fields[0]));
 				n.setProperty("parentid", parseInt(fields[1]));
 				n.setProperty("rank", parseString(fields[2]));
+				
+				// Do import over multiple transactions for the
+				// sake of memory footprint.
+				if (++n_nodes % PERIODIC_COMMIT == 0) {
+					tx.success();
+					tx.close();
+					tx = beginTransaction();
+				}
+				
+				progress.print();
 			}
 			
 			tx.success();
@@ -147,29 +161,43 @@ public class NeoDao {
 			if (reader != null) {
 				reader.close();
 			}
+			if (tx != null) {
+				tx.close();
+			}
 		}
 	
 		// Add constraints
-		try (Transaction tx = beginTransaction()) {
+		try (Transaction tx_ = beginTransaction()) {
 			ExecutionEngine engine = getEngineInstance();
 			engine.execute("create constraint on (n:Node) assert n.taxid is unique;");
 			engine.execute("create index on :Node(parentid);");
 			engine.execute("create index on :Node(rank);");
-			tx.success();
+			tx_.success();
 		}
 		
 		// All parent->child relations created via this database query.
 		System.out.println("Creating relations...");
 		logger.debug("Creating relations...");
 		
-		try (Transaction tx = beginTransaction()) {
-			getEngineInstance().execute(
-					"match (parent:Node), (child:Node) " +
-						"using index parent:Node(taxid) " +
-						"where parent.taxid = child.parentid " + 
-						"create (child)-[:CHILD]->(parent);");
-			tx.success();
+		long maxNode = countAllNodes();
+		ConsoleProgress progress = new ConsoleProgress(maxNode,50);
+		for (long n=0; n<=maxNode; n+=PERIODIC_COMMIT) {
+			try (Transaction tx_ = beginTransaction()) {
+				Map<String, Object> props = new HashMap<String, Object>();
+				props.put("skip_n", n);
+				props.put("limit_n", PERIODIC_COMMIT);
+				getEngineInstance().execute(
+						"match (parent:Node), (child:Node) " +
+							"using index parent:Node(taxid) " +
+							"where parent.taxid = child.parentid " + 
+							"with child, parent " +
+							"skip {skip_n} limit {limit_n} " +
+							"create (child)-[:CHILD]->(parent);", props);
+				tx_.success();
+			}
+			progress.updateTo(n);
 		}
+		progress.finish();
  	}
 	
 	private void addNames(File path) throws IOException {
@@ -177,9 +205,12 @@ public class NeoDao {
 		logger.debug("Decorating nodes with scientific names...");
 		
 		BufferedReader reader = null;
-		try (Transaction tx = beginTransaction()){
+		Transaction tx = null;
+		try {
 			reader = new BufferedReader(new FileReader(path));
+			tx = beginTransaction();
 			
+			int n_nodes = 0;
 			ExecutionEngine engine = getEngineInstance();
 			
 			while (true) {
@@ -207,6 +238,14 @@ public class NeoDao {
 						"match (n:Node {taxid: {taxid}}) " +
 							"set n += {sci_name: {sci_name}} " +
 							"return n;", props);
+				
+				// Do import over multiple transactions for the
+				// sake of memory footprint.
+				if (++n_nodes % PERIODIC_COMMIT == 0) {
+					tx.success();
+					tx.close();
+					tx = beginTransaction();
+				}
 			}
 
 			tx.success();
@@ -215,14 +254,32 @@ public class NeoDao {
 			if (reader != null) {
 				reader.close();
 			}
+			if (tx != null) {
+				tx.close();
+			}
 		}
 		
-		try (Transaction tx = beginTransaction()) {
+		try (Transaction tx_ = beginTransaction()) {
 			// create an index on the names for queries.
 			getEngineInstance().execute("create index on :Node(sci_name);");
-			tx.success();
+			tx_.success();
 		}
 	}
+	
+	protected Long getLargestNodeId() {
+		ExecutionResult result = getEngineInstance().execute(
+				"match (Node) return max(id(Node)) as max_id");
+		
+		return (Long)IteratorUtil.single(result).get("max_id");
+	}
+	
+	protected Long countAllNodes() {
+		ExecutionResult result = getEngineInstance().execute(
+				"match (Node) return count(*) as node_count");
+		
+		return (Long)IteratorUtil.single(result).get("node_count");
+	}
+	
 	
 	/**
 	 * Test for the existence of a taxon by taxon id.
@@ -267,6 +324,7 @@ public class NeoDao {
 			Map<String, Object> props = new HashMap<String, Object>();
 			props.put("firstid", firstId);
 			props.put("topid", topId);
+		
 			ExecutionResult result = getEngineInstance().execute(
 					"optional match (first:Node {taxid: {firstid}}), (top:Node {taxid:{topid}}), " +
 						"p = shortestPath((first)-[*..20]-(top)) " +
