@@ -24,6 +24,7 @@ import org.apache.commons.cli.ParseException;
  */
 public class NeoConsole {
 	private static int CONSOLE_WIDTH = 120;
+	private static String DELIMITER_PATTERN = ",";
 	private NeoDao dao = null;
 	
 	public void openDBConnection(File dbPath, Mode mode) throws IOException {
@@ -64,9 +65,9 @@ public class NeoConsole {
 				if (line.length() == 0) {
 					continue;
 				}
-				String[] fields = line.split(" ");
+				String[] fields = line.split(DELIMITER_PATTERN);
 				if (fields.length > 1) {
-					throw new RuntimeException("Only one per taxon id per line when validating individuals");
+					throw new RuntimeException("Only one per taxon_id per line is allowed when validating individuals");
 				}
 				List<Integer> taxIds = stringsToInt(fields);
 				getDao().taxonsExist(taxIds);
@@ -112,7 +113,7 @@ public class NeoConsole {
 				if (line.length() == 0) {
 					continue;
 				}
-				String[] fields = line.split(" ");
+				String[] fields = line.split(DELIMITER_PATTERN);
 				
 				List<Integer> lineage = stringsToInt(fields);
 				boolean valid = getDao().traversePath(lineage, reverseOrder);
