@@ -4,6 +4,7 @@ import java.io.BufferedReader;
 import java.io.File;
 import java.io.FileReader;
 import java.io.IOException;
+import java.util.ArrayList;
 import java.util.Arrays;
 import java.util.Collections;
 import java.util.HashMap;
@@ -336,8 +337,36 @@ public class NeoDao {
 					resultMap.get("path_exists").equals(true);
 		}
 	}
+	
+	/**
+	 * Test whether a undirected lineage exists within the NCBI taxonomy.
+	 * <p>
+	 * In this case, it does not matter which order the lineage has been
+	 * specified. {@code child->parent} or {@code parent->child}.
+	 * 
+	 * @param lineage - the lineage to test.
+	 * @return true if either direction of the lineage exists.
+	 */
+	public boolean undirectedLineageExists(List<Integer> lineage) {
+		// make a reverse lineage.
+		List<Integer> revLineage = new ArrayList<Integer>(lineage.size());
+		Collections.copy(revLineage, lineage);
+		Collections.reverse(revLineage);
+		// test whether either direction exists.
+		return directedPathExists(lineage, false) || directedPathExists(revLineage, false); 
+	}
 
-	public boolean traversePath(List<Integer> lineage, boolean reverseOrder) {
+	/**
+	 * Test whether the complete path exists within the NCBI taxonomy.
+	 * <p>
+	 * All taxon ids must exist in a connected path. The path is directed and
+	 * must be in the correct order, {@code child -> parent}.
+	 * <p>
+	 * @param lineage - the taxonomy path to test.
+	 * @param reverseOrder - reverse the order before testing.
+	 * @return
+	 */
+	public boolean directedPathExists(List<Integer> lineage, boolean reverseOrder) {
 		boolean validLineage = true;
 		try (Transaction tx = beginTransaction()) {
 			ExecutionEngine engine = getEngineInstance();

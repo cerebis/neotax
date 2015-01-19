@@ -1,10 +1,10 @@
 #Fat Jar Configuration File
-#Sun Jan 11 22:02:26 EST 2015
+#Mon Jan 19 16:58:36 EST 2015
 onejar.license.required=false
 manifest.classpath=
 manifest.removesigners=true
 onejar.checkbox=true
-jarname=NeoTax_v0.1.2.jar
+jarname=NeoTax_v0.1.3.jar
 manifest.mergeall=true
 manifest.mainclass=mzd.taxonomy.neo.NeoConsole
 manifest.file=<createnew>

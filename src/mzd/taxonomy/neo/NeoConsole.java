@@ -88,7 +88,7 @@ public class NeoConsole {
 	 * @param reverseOrder if the order should be reversed prior to checking
 	 */
 	public void validateLineage(List<Integer> lineage, boolean reverseOrder) {
-		boolean valid = getDao().traversePath(lineage, reverseOrder);
+		boolean valid = getDao().directedPathExists(lineage, reverseOrder);
 		System.out.println(lineage.toString() + (valid ? " valid" : " invalid"));
 	}
 	
@@ -116,7 +116,7 @@ public class NeoConsole {
 				String[] fields = line.split(DELIMITER_PATTERN);
 				
 				List<Integer> lineage = stringsToInt(fields);
-				boolean valid = getDao().traversePath(lineage, reverseOrder);
+				boolean valid = getDao().directedPathExists(lineage, reverseOrder);
 				System.out.println(lineage.toString() + (valid ? " valid" : " invalid"));
 			}
 		}
@@ -201,7 +201,7 @@ public class NeoConsole {
 				.create(TAXON_OPT));
 		
 		cli_group.addOption(OptionBuilder
-				.withDescription("Validate comma taxonomic lineage (comma separated integers)")
+				.withDescription("Validate taxonomic lineage (white-space separated integers)")
 				.withArgName("LINEAGE")
 				.hasArg(false)
 				.create(LINEAGE_OPT));
@@ -286,7 +286,7 @@ public class NeoConsole {
 				// Validate lineages
 				else if (cmd.hasOption(LINEAGE_OPT)) {
 					nc.openDBConnection(dbPath, Mode.OPEN_EXISTING);
-					
+
 					if (cmd.hasOption(FILE_OPT)) {
 						nc.validateLineage(getInputFile(cmd), reverseOrder);
 					}
