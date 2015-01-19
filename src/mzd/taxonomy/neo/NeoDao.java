@@ -347,7 +347,7 @@ public class NeoDao {
 	 * @param lineage - the lineage to test.
 	 * @return true if either direction of the lineage exists.
 	 */
-	public boolean undirectedLineageExists(List<Integer> lineage) {
+	public boolean undirectedPathExists(List<Integer> lineage) {
 		// make a reverse lineage.
 		List<Integer> revLineage = new ArrayList<Integer>(lineage.size());
 		Collections.copy(revLineage, lineage);
