@@ -64,10 +64,24 @@ public class NeoDao {
 		dbPath = DEFAULT_DATABASE;
 	}
 	
+	/**
+	 * Create NeoDao assuming database already exists.
+	 * 
+	 * @param dbPath - path to existing database
+	 * @throws IOException
+	 */
 	public NeoDao(File dbPath) throws IOException {
 		this(dbPath, Mode.OPEN_EXISTING);
 	}
 	
+	/**
+	 * Create NeoDao instance and specify if existing database or
+	 * creating a new database one.
+	 * 
+	 * @param dbPath - path to database
+	 * @param mode - {@code Mode.OPEN_EXISTING} or {@code Mode.INIT_NEW}
+	 * @throws IOException
+	 */
 	public NeoDao(File dbPath, Mode mode) throws IOException {
 		if (dbPath == null) {
 			dbPath = DEFAULT_DATABASE;
@@ -371,6 +385,11 @@ public class NeoDao {
 		try (Transaction tx = beginTransaction()) {
 			ExecutionEngine engine = getEngineInstance();
 			
+			// Edge case where the lineage is only a single element.
+			if (lineage.size() == 1) {
+				return taxonExists(lineage.get(0));
+			}
+			
 			// We will walk backwards child -> parent.
 			if (reverseOrder) {
 				Collections.reverse(lineage);
@@ -401,7 +420,8 @@ public class NeoDao {
 					queryId = parentId;
 				}
 				catch (NoSuchElementException ex) {
-					throw new RuntimeException(String.format("TaxonId %d was not found", queryId));
+					ex.printStackTrace();
+					throw new RuntimeException(String.format("TaxonId %d was not found", queryId),ex);
 				}
 			} while (it.hasNext());
 		}
