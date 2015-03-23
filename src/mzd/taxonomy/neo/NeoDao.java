@@ -328,28 +328,38 @@ public class NeoDao {
 	}
 	
 	/**
-	 * Test whether a path exists between two ids within the NCBI taxonomy.
+	 * Test whether a path exists between two ids within the NCBI taxonomy. Taxon
+	 * ids can be supplied in either order.
+	 *
+	 * @param firstId the first taxon id in path
+	 * @param secondId the second taxon id in path
 	 * 
-	 * @param firstId beginning (lowest) taxon id in path
-	 * @param topId final (highest/root) taxon id in path
 	 * @return true if a path exists
 	 */
-	public boolean lineageExists(Integer firstId, Integer topId) {
+	public boolean sparsePathExists(Integer firstId, Integer secondId) {
 		try (Transaction tx = beginTransaction()) {
 			Map<String, Object> props = new HashMap<String, Object>();
-			props.put("firstid", firstId);
-			props.put("topid", topId);
+			props.put("first_id", firstId);
+			props.put("second_id", secondId);
 		
 			ExecutionResult result = getEngineInstance().execute(
-					"optional match (first:Node {taxid: {firstid}}), (top:Node {taxid:{topid}}), " +
-						"p = shortestPath((first)-[*..20]-(top)) " +
-						"return distinct {firstid} as firstid, {topid} as topid, count(p)=1 as path_exists;", props);
+					"optional match (n1:Node {taxid: {first_id}}), (n2:Node {taxid:{second_id}}), " +
+						"p = shortestPath((n1)-[*]-(n2)) " +
+						"return distinct {first_id} as first_id, {second_id} as second_id, count(p)=1 as path_exists;", props);
 			
 			Map<String, Object> resultMap = IteratorUtil.single(result);
-			return resultMap.get("firstid").equals(firstId) &&
-					resultMap.get("topid").equals(topId) &&
+			return resultMap.get("first_id").equals(firstId) &&
+					resultMap.get("second_id").equals(secondId) &&
 					resultMap.get("path_exists").equals(true);
 		}
+	}
+	
+	public boolean sparsePathExists(List<Integer> ids) {
+		if (ids.size() != 2) {
+			throw new RuntimeException("Too many ids supplied, sparse lineages can only "
+					+ "possess start and end points.");
+		}
+		return sparsePathExists(ids.get(0), ids.get(1));
 	}
 	
 	/**

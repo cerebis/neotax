@@ -86,9 +86,16 @@ public class NeoConsole {
 	 * 
 	 * @param lineage a list representing a single lineage
 	 * @param reverseOrder if the order should be reversed prior to checking
+	 * @param sparse the lineage contains only the end points
 	 */
-	public void validateLineage(List<Integer> lineage, boolean reverseOrder) {
-		boolean valid = getDao().directedPathExists(lineage, reverseOrder);
+	public void validateLineage(List<Integer> lineage, boolean reverseOrder, boolean sparse) {
+		boolean valid = false;
+		if (sparse) {
+			valid = getDao().sparsePathExists(lineage);
+		}
+		else {
+			valid = getDao().directedPathExists(lineage, reverseOrder);
+		}
 		System.out.println(lineage.toString() + (valid ? " valid" : " invalid"));
 	}
 	
@@ -98,9 +105,10 @@ public class NeoConsole {
 	 * 
 	 * @param inputLineages input file of lineages, one per line
 	 * @param reverseOrder reverse lineage order prior to checkign
+	 * @param sparse the lineage contains only the end points
 	 * @throws IOException when error reading from file
 	 */
-	public void validateLineage(File inputLineages, boolean reverseOrder) throws IOException {
+	public void validateLineage(File inputLineages, boolean reverseOrder, boolean sparse) throws IOException {
 		BufferedReader reader = null;
 		try {
 			reader = new BufferedReader(new FileReader(inputLineages));
@@ -115,8 +123,14 @@ public class NeoConsole {
 				}
 				String[] fields = line.split(DELIMITER_PATTERN);
 				
+				boolean valid = false;
 				List<Integer> lineage = stringsToInt(fields);
-				boolean valid = getDao().directedPathExists(lineage, reverseOrder);
+				if (sparse) {
+					valid = getDao().sparsePathExists(lineage);
+				}
+				else {
+					valid = getDao().directedPathExists(lineage, reverseOrder);
+				}
 				System.out.println(lineage.toString() + (valid ? " valid" : " invalid"));
 			}
 		}
@@ -183,6 +197,7 @@ public class NeoConsole {
 		char LINEAGE_OPT = 'l';
 		char TAXON_OPT = 't';
 		char FILE_OPT = 'f';
+		char SPARSE_OPT = 's';
 		
 		Options options = new Options();
 		
@@ -220,6 +235,11 @@ public class NeoConsole {
 				.create(REVERSE_OPT));
 		
 		options.addOption(OptionBuilder
+				.withDescription("Sparse lineage (endpoints only)")
+				.hasArg(false)
+				.create(SPARSE_OPT));
+
+		options.addOption(OptionBuilder
 				.withDescription("Trailing arguments are taken to be a file names [only first processed]")
 				.hasArg(false)
 				.create(FILE_OPT));
@@ -239,7 +259,7 @@ public class NeoConsole {
 			
 			if (args.length == 0 || cmd.hasOption(HELP_OPT)) {
 				HelpFormatter formatter = new HelpFormatter();
-				String usage = "neotax [-d <PATH>] [-f] [-h] " +
+				String usage = "neotax [-d <PATH>] [-f] [-h] [-s]" +
 						"[-i <NODES.DMP> <NAMES.DMP> | -l <LINEAGE | FILE_NAME> | -t <TAXID | FILE_NAME>]";
 				formatter.printHelp(CONSOLE_WIDTH, usage, "", options, "", false);
 			}
@@ -286,12 +306,13 @@ public class NeoConsole {
 				// Validate lineages
 				else if (cmd.hasOption(LINEAGE_OPT)) {
 					nc.openDBConnection(dbPath, Mode.OPEN_EXISTING);
-
+					
+					boolean isSparse = cmd.hasOption(SPARSE_OPT);
 					if (cmd.hasOption(FILE_OPT)) {
-						nc.validateLineage(getInputFile(cmd), reverseOrder);
+						nc.validateLineage(getInputFile(cmd), reverseOrder, isSparse);
 					}
 					else {
-						nc.validateLineage(stringsToInt(cmd.getArgs()), reverseOrder);
+						nc.validateLineage(stringsToInt(cmd.getArgs()), reverseOrder, isSparse);
 					}
 				}
 			}

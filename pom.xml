@@ -4,7 +4,7 @@
 
 	<groupId>mzd.github</groupId>
 	<artifactId>neotax</artifactId>
-	<version>0.1.4</version>
+	<version>0.1.5</version>
 	<packaging>jar</packaging>
 	
 	<name>neotax</name>
