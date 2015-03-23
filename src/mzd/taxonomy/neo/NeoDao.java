@@ -329,7 +329,8 @@ public class NeoDao {
 	
 	/**
 	 * Test whether a path exists between two ids within the NCBI taxonomy. Taxon
-	 * ids can be supplied in either order.
+	 * ids can be supplied in either order, searches are directional and will stop
+	 * at the root node.
 	 *
 	 * @param firstId the first taxon id in path
 	 * @param secondId the second taxon id in path
@@ -342,12 +343,13 @@ public class NeoDao {
 			props.put("first_id", firstId);
 			props.put("second_id", secondId);
 		
-			ExecutionResult result = getEngineInstance().execute(
-					"optional match (n1:Node {taxid: {first_id}}), (n2:Node {taxid:{second_id}}), " +
-						"p = shortestPath((n1)-[*]-(n2)) " +
-						"return distinct {first_id} as first_id, {second_id} as second_id, count(p)=1 as path_exists;", props);
+			ExecutionResult resultFwd = getEngineInstance().execute(
+					"optional match (n1:Node {taxid: {first_id}}), (n2:Node {taxid:{second_id}}) " +
+						"return distinct {first_id} as first_id, {second_id} as second_id, "
+						+ "count(shortestPath((n1)<-[*]-(n2))) = 1 OR "
+						+ "count(shortestPath((n2)<-[*]-(n1))) = 1 as path_exists;", props);
 			
-			Map<String, Object> resultMap = IteratorUtil.single(result);
+			Map<String, Object> resultMap = IteratorUtil.single(resultFwd);
 			return resultMap.get("first_id").equals(firstId) &&
 					resultMap.get("second_id").equals(secondId) &&
 					resultMap.get("path_exists").equals(true);
