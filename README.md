@@ -18,4 +18,4 @@ The project can be built using Maven. (Eg. ```mvn package```)
    2. Or initialise a new database
       1. Download taxdump.tar.gz from [NCBI FTP](ftp://ftp.ncbi.nlm.nih.gov/pub/taxonomy/)
       2. Extract the archive to some path.
-      3. java -jar neotax-x.y.jar -i {extracted path}/nodes.dmp {extracted path}/names.dmp
+      3. ```java -jar neotax-x.y.jar -i {extracted path}/nodes.dmp {extracted path}/names.dmp```
